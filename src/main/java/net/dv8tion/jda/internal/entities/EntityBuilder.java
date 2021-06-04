@@ -1574,11 +1574,14 @@ public class EntityBuilder
 
         final DataObject channelObject = object.getObject("channel");
         final ChannelType channelType = ChannelType.fromId(channelObject.getInt("type"));
+        final Invite.TargetType targetType = Invite.TargetType.fromId(object.getInt("target_type", -1));
 
         final Invite.InviteType type;
         final Invite.Guild guild;
         final Invite.Channel channel;
         final Invite.Group group;
+        final Invite.EmbeddedApplication application;
+        final User targetUser;
 
         if (channelType == ChannelType.GROUP)
         {
@@ -1636,6 +1639,31 @@ public class EntityBuilder
             group = null;
         }
 
+        if (targetType == Invite.TargetType.STREAM) {
+            final DataObject targetUserObject = object.getObject("target_user");
+            targetUser = createUser(targetUserObject);
+            application = null;
+        }
+        else if (targetType == Invite.TargetType.EMBEDDED_APPLICATION)
+        {
+            final DataObject applicationObject = object.getObject("target_application");
+
+            final String applicationIconId = applicationObject.getString("icon", null);
+            final String applicationName = applicationObject.getString("name");
+            final String applicationDescription = applicationObject.getString("description");
+            final String applicationSummary = applicationObject.getString("summary");
+            final long applicationId = applicationObject.getLong("id");
+            final int maxApplicationParticipants = applicationObject.getInt("max_participants", -1);
+
+            application = new InviteImpl.EmbeddedApplicationImpl(applicationIconId, applicationName, applicationDescription, applicationSummary, applicationId, maxApplicationParticipants);
+            targetUser = null;
+        }
+        else
+        {
+            application = null;
+            targetUser = null;
+        }
+
         final int maxAge;
         final int maxUses;
         final boolean temporary;
@@ -1664,7 +1692,7 @@ public class EntityBuilder
 
         return new InviteImpl(getJDA(), code, expanded, inviter,
                               maxAge, maxUses, temporary,
-                              timeCreated, uses, channel, guild, group, type);
+                              timeCreated, uses, channel, guild, group, application, targetUser, type, targetType);
     }
 
     public ApplicationInfo createApplicationInfo(DataObject object)
