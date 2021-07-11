@@ -279,6 +279,9 @@ public class EntityBuilder
 
 
         createGuildEmotePass(guildObj, emotesArray);
+        guildJson.optArray("stage_instances")
+                .map(arr -> arr.stream(DataArray::getObject))
+                .ifPresent(list -> list.forEach(it -> createStageInstance(guildObj, it)));
 
         guildObj.setAfkChannel(guildObj.getVoiceChannelById(afkChannelId))
                 .setSystemChannel(guildObj.getTextChannelById(systemChannelId))
@@ -296,6 +299,7 @@ public class EntityBuilder
         case TEXT:
             createTextChannel(guildObj, channelData, guildObj.getIdLong());
             break;
+        case STAGE:
         case VOICE:
             createVoiceChannel(guildObj, channelData, guildObj.getIdLong());
             break;
@@ -536,6 +540,11 @@ public class EntityBuilder
             LOG.error("Received a GuildVoiceState with a channel ID for a non-existent channel! ChannelId: {} GuildId: {} UserId: {}",
                       channelId, guild.getId(), user.getId());
 
+        String requestToSpeak = voiceStateJson.getString("request_to_speak_timestamp", null);
+        OffsetDateTime timestamp = null;
+        if (requestToSpeak != null)
+            timestamp = OffsetDateTime.parse(requestToSpeak);
+
         // VoiceState is considered volatile so we don't expect anything to actually exist
         voiceState.setSelfMuted(voiceStateJson.getBoolean("self_mute"))
                   .setSelfDeafened(voiceStateJson.getBoolean("self_deaf"))
@@ -544,6 +553,7 @@ public class EntityBuilder
                   .setSuppressed(voiceStateJson.getBoolean("suppress"))
                   .setSessionId(voiceStateJson.getString("session_id"))
                   .setStream(voiceStateJson.getBoolean("self_stream"))
+                  .setRequestToSpeak(timestamp)
                   .setConnectedChannel(voiceChannel);
     }
 
@@ -974,7 +984,10 @@ public class EntityBuilder
                 UnlockHook vlock = guildVoiceView.writeLock();
                 UnlockHook jlock = voiceView.writeLock())
             {
-                channel = new VoiceChannelImpl(id, guild);
+                if (json.getInt("type") == ChannelType.STAGE.getId())
+                    channel = new StageChannelImpl(id, guild);
+                else
+                    channel = new VoiceChannelImpl(id, guild);
                 guildVoiceView.getMap().put(id, channel);
                 playbackCache = voiceView.getMap().put(id, channel) == null;
             }
@@ -1032,6 +1045,33 @@ public class EntityBuilder
         api.usedPrivateChannel(channelId);
         getJDA().getEventCache().playbackCache(EventCache.Type.CHANNEL, channelId);
         return priv;
+    }
+
+    @Nullable
+    public StageInstance createStageInstance(GuildImpl guild, DataObject json)
+    {
+        long channelId = json.getUnsignedLong("channel_id");
+        StageChannelImpl channel = (StageChannelImpl) guild.getStageChannelById(channelId);
+        if (channel == null)
+            return null;
+
+        long id = json.getUnsignedLong("id");
+        String topic = json.getString("topic");
+        boolean discoverable = !json.getBoolean("discoverable_disabled");
+        StageInstance.PrivacyLevel level = StageInstance.PrivacyLevel.fromKey(json.getInt("privacy_level", -1));
+
+
+        StageInstanceImpl instance = (StageInstanceImpl) channel.getStageInstance();
+        if (instance == null)
+        {
+            instance = new StageInstanceImpl(id, channel);
+            channel.setStageInstance(instance);
+        }
+
+        return instance
+                .setPrivacyLevel(level)
+                .setDiscoverable(discoverable)
+                .setTopic(topic);
     }
 
     public void createOverridesPass(AbstractChannelImpl<?,?> channel, DataArray overrides)
@@ -1463,10 +1503,9 @@ public class EntityBuilder
     {
         final long id = content.getLong("id");
         final String name = content.getString("name");
-        final String description = content.getString("description");
-        final long packId = content.getLong("pack_id");
-        final String asset = content.getString("asset");
-        final String previewAsset = content.getString("preview_asset", null);
+        final String description = content.getString("description", "");
+        final long packId = content.getLong("pack_id", content.getLong("guild_id", 0L));
+        final String asset = content.getString("asset", "");
         final MessageSticker.StickerFormat format = MessageSticker.StickerFormat.fromId(content.getInt("format_type"));
         final Set<String> tags;
         if (content.isNull("tags"))
@@ -1479,7 +1518,7 @@ public class EntityBuilder
             final Set<String> tmp = new HashSet<>(Arrays.asList(split));
             tags = Collections.unmodifiableSet(tmp);
         }
-        return new MessageSticker(id, name, description, packId, asset, previewAsset, format, tags);
+        return new MessageSticker(id, name, description, packId, asset, format, tags);
     }
 
     @Nullable
