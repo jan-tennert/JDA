@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package net.dv8tion.jda.api.interactions.commands;
+package net.dv8tion.jda.api.interactions.commands.interactions;
 
-import net.dv8tion.jda.api.entities.*;
-import net.dv8tion.jda.api.interactions.Interaction;
-import net.dv8tion.jda.internal.entities.MemberImpl;
-import net.dv8tion.jda.internal.entities.RoleImpl;
-import net.dv8tion.jda.internal.entities.UserImpl;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Role;
+import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.events.interaction.commands.SlashCommandEvent;
+import net.dv8tion.jda.api.interactions.commands.OptionMapping;
+import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.internal.utils.Checks;
 
 import javax.annotation.Nonnull;
@@ -31,28 +32,10 @@ import java.util.stream.Collectors;
 /**
  * Interaction of a Slash-Command.
  *
- * @see net.dv8tion.jda.api.events.interaction.SlashCommandEvent
+ * @see SlashCommandEvent
  */
-public interface CommandInteraction extends Interaction
+public interface SlashCommandInteraction extends CommandInteraction
 {
-    /**
-     * The command name.
-     * <br>This can be useful for abstractions.
-     *
-     * <p>Note that commands can have these following structures:
-     * <ul>
-     *     <li>{@code /name subcommandGroup subcommandName}</li>
-     *     <li>{@code /name subcommandName}</li>
-     *     <li>{@code /name}</li>
-     * </ul>
-     *
-     * You can use {@link #getCommandPath()} to simplify your checks.
-     *
-     * @return The command name
-     */
-    @Nonnull
-    String getName();
-
     /**
      * The subcommand name.
      * <br>This can be useful for abstractions.
@@ -102,6 +85,7 @@ public interface CommandInteraction extends Interaction
      *
      * @return The command path
      */
+    @Override
     @Nonnull
     default String getCommandPath()
     {
@@ -111,28 +95,6 @@ public interface CommandInteraction extends Interaction
         if (getSubcommandName() != null)
             builder.append('/').append(getSubcommandName());
         return builder.toString();
-    }
-
-    @Nonnull
-    @Override
-    MessageChannel getChannel();
-
-    /**
-     * The command id
-     *
-     * @return The command id
-     */
-    long getCommandIdLong();
-
-    /**
-     * The command id
-     *
-     * @return The command id
-     */
-    @Nonnull
-    default String getCommandId()
-    {
-        return Long.toUnsignedString(getCommandIdLong());
     }
 
     /**
@@ -203,6 +165,7 @@ public interface CommandInteraction extends Interaction
         List<OptionMapping> options = getOptionsByName(name);
         return options.isEmpty() ? null : options.get(0);
     }
+
 
     /**
      * Gets the slash command String for this slash command.
